@@ -165,6 +165,19 @@ const DynamicFormHandler = (() => {
       return;
     }
 
+    // Initially disable the button
+    disableSubmitButton();
+
+    // Add event listeners to form inputs for real-time validation
+    const form = document.getElementById('wf-form-Join-Circle-Form');
+    if (form) {
+      const inputs = form.querySelectorAll('input[data-field-name], select[data-field-name], textarea[data-field-name]');
+      inputs.forEach((input) => {
+        input.addEventListener('change', updateButtonState);
+        input.addEventListener('input', updateButtonState);
+      });
+    }
+
     submitButton.addEventListener('click', async (e) => {
       e.preventDefault();
       
@@ -181,6 +194,76 @@ const DynamicFormHandler = (() => {
 
       await submitForm();
     });
+  };
+
+  /**
+   * Update submit button state based on form validation
+   */
+  const updateButtonState = () => {
+    const submitButton = document.querySelector('.circle_button.is-form-long');
+    if (!submitButton) return;
+
+    const isFormValid = isFormFieldsValid();
+    const isCaptchaValid = recaptchaToken !== null;
+
+    if (isFormValid && isCaptchaValid) {
+      enableSubmitButton();
+    } else {
+      disableSubmitButton();
+    }
+
+    console.log('[v0] Button state updated - Form valid:', isFormValid, 'CAPTCHA valid:', isCaptchaValid);
+  };
+
+  /**
+   * Check if all required form fields are valid
+   */
+  const isFormFieldsValid = () => {
+    const form = document.getElementById('wf-form-Join-Circle-Form');
+    if (!form) return false;
+
+    const inputs = form.querySelectorAll('input[data-field-name], select[data-field-name], textarea[data-field-name]');
+    
+    for (const input of inputs) {
+      if (input.hasAttribute('required')) {
+        if (input.type === 'checkbox') {
+          // For checkboxes, check if at least one is checked in the group
+          const checkboxGroup = form.querySelectorAll(`input[name="${input.name}"]`);
+          const anyChecked = Array.from(checkboxGroup).some((cb) => cb.checked);
+          if (!anyChecked) {
+            return false;
+          }
+        } else if (input.value.trim() === '') {
+          return false;
+        }
+      }
+    }
+    
+    return true;
+  };
+
+  /**
+   * Enable submit button
+   */
+  const enableSubmitButton = () => {
+    const submitButton = document.querySelector('.circle_button.is-form-long');
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.style.opacity = '1';
+      submitButton.style.cursor = 'pointer';
+    }
+  };
+
+  /**
+   * Disable submit button
+   */
+  const disableSubmitButton = () => {
+    const submitButton = document.querySelector('.circle_button.is-form-long');
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.style.opacity = '0.5';
+      submitButton.style.cursor = 'not-allowed';
+    }
   };
 
   /**
@@ -256,6 +339,7 @@ const DynamicFormHandler = (() => {
   window.onRecaptchaSuccess = (token) => {
     recaptchaToken = token;
     console.log('[v0] reCAPTCHA token received');
+    updateButtonState();
   };
 
   /**
@@ -264,6 +348,7 @@ const DynamicFormHandler = (() => {
   window.onRecaptchaError = () => {
     recaptchaToken = null;
     console.log('[v0] reCAPTCHA verification failed');
+    updateButtonState();
   };
 
   /**

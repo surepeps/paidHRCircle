@@ -41,18 +41,12 @@
   grid-column: 1 / -1 !important;
 }
 
-/* Checkbox field styling */
+/* Checkbox field styling - One per row */
 .circle-form_option-wrap {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: 1fr;
   gap: 16px;
   margin-top: 12px;
-}
-
-@media (max-width: 640px) {
-  .circle-form_option-wrap {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* Checkbox styling */
