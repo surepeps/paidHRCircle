@@ -69,6 +69,55 @@ twq('config','ozo3a');
   <!--  Target specific search engines  -->
   <meta name="googlebot" content="noindex">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.12/css/intlTelInput.min.css" rel="stylesheet">
+  <!-- HubSpot Form CSS Variables -->
+  <style>
+    :root {
+      --hsf-global__font-family: 'Montserrat', sans-serif;
+      --hsf-global__font-size: 16px;
+      --hsf-global__color: #000000;
+      --hsf-global-error__color: #f43f5e;
+      --hsf-field-input__font-family: 'Montserrat', sans-serif;
+      --hsf-field-input__color: #000000;
+      --hsf-field-input__background-color: #ffffff;
+      --hsf-field-input__placeholder-color: #b4b4b4;
+      --hsf-field-input__border-color: #e0e0e0;
+      --hsf-field-input__border-width: 1px;
+      --hsf-field-input__border-style: solid;
+      --hsf-field-input__border-radius: 8px;
+      --hsf-field-input__padding: 12px 16px;
+      --hsf-field-label__font-family: 'Montserrat', sans-serif;
+      --hsf-field-label__font-size: 14px;
+      --hsf-field-label__color: #000000;
+      --hsf-field-label-requiredindicator__color: #f43f5e;
+      --hsf-field-description__font-family: 'Montserrat', sans-serif;
+      --hsf-field-description__color: #666666;
+      --hsf-field-textarea__font-family: 'Montserrat', sans-serif;
+      --hsf-field-textarea__color: #000000;
+      --hsf-field-textarea__background-color: #ffffff;
+      --hsf-field-textarea__placeholder-color: #b4b4b4;
+      --hsf-field-textarea__border-color: #e0e0e0;
+      --hsf-field-textarea__border-radius: 8px;
+      --hsf-field-textarea__padding: 12px 16px;
+      --hsf-field-checkbox__background-color: #ffffff;
+      --hsf-field-checkbox__color: #000000;
+      --hsf-field-checkbox__border-color: #e0e0e0;
+      --hsf-field-checkbox__padding: 8px;
+      --hsf-field-radio__background-color: #ffffff;
+      --hsf-field-radio__color: #000000;
+      --hsf-field-radio__border-color: #e0e0e0;
+      --hsf-field-radio__padding: 8px;
+      --hsf-button__font-family: 'Montserrat', sans-serif;
+      --hsf-button__font-size: 16px;
+      --hsf-button__color: #ffffff;
+      --hsf-button__background-color: #144bf5;
+      --hsf-button__border-radius: 8px;
+      --hsf-button__padding: 12px 24px;
+      --hsf-background__background-color: #ffffff;
+      --hsf-background__border-radius: 12px;
+      --hsf-background__padding: 24px;
+      --hsf-row__vertical-spacing: 16px;
+    }
+  </style>
   <style>
 .hide {
 		display: none;
@@ -328,6 +377,17 @@ twq('config','ozo3a');
               <p class="text-size-medium-new max-width-320px text-color-secondary">Step into the Circle built for HR leaders across industries.</p>
             </div>
             <div id="circle-form" class="circle-form_fields"></div>
+            <div id="hubspot-form-loader" style="display:flex; align-items:center; justify-content:center; min-height:200px; width:100%;">
+              <div style="text-align:center;">
+                <div style="display:inline-block; width:40px; height:40px; border:3px solid #e0e0e0; border-top-color:#144bf5; border-radius:50%; animation:spin 1s linear infinite;" id="spinner"></div>
+                <p style="margin-top:16px; color:#666666; font-family:'Montserrat',sans-serif; font-size:14px;">Loading form...</p>
+              </div>
+            </div>
+            <style>
+              @keyframes spin {
+                to { transform: rotate(360deg); }
+              }
+            </style>
           </div>
         </div>
       </div>
@@ -1571,11 +1631,20 @@ document.addEventListener('DOMContentLoaded', function() {
       const leadFormCloseIcon = document.querySelector('#lead-form-wrap .circle-form_close-icon');
       const hubspotCloseIcon = document.querySelector('#hubspot-form-wrap .circle-form_close-icon');
       
-      // Function to show modal
+      // Track which modal is open
+      let currentOpenModal = null;
+      let hubspotFormLoaded = false;
+      
+      // Function to show modal (ensures only one is open at a time)
       function showModal(modal) {
         if (modal) {
+          // Hide any currently open modal
+          if (currentOpenModal && currentOpenModal !== modal) {
+            currentOpenModal.style.display = 'none';
+          }
           modal.style.display = 'block';
           document.body.style.overflow = 'hidden';
+          currentOpenModal = modal;
         }
       }
       
@@ -1584,6 +1653,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (modal) {
           modal.style.display = 'none';
           document.body.style.overflow = '';
+          if (currentOpenModal === modal) {
+            currentOpenModal = null;
+          }
         }
       }
       
@@ -1591,7 +1663,6 @@ document.addEventListener('DOMContentLoaded', function() {
       if (joinCommunityBtn) {
         joinCommunityBtn.addEventListener('click', function(e) {
           e.preventDefault();
-          hideModal(hubspotFormWrap);
           showModal(leadFormWrap);
         });
       }
@@ -1600,16 +1671,10 @@ document.addEventListener('DOMContentLoaded', function() {
       if (hubspotFormBtn) {
         hubspotFormBtn.addEventListener('click', function(e) {
           e.preventDefault();
-          hideModal(leadFormWrap);
           showModal(hubspotFormWrap);
           // Load HubSpot form if not already loaded
-          if (typeof hbspt === 'undefined') {
+          if (!hubspotFormLoaded) {
             loadHubSpotForm();
-          } else {
-            // Reload form if HubSpot is already available
-            if (hbspt.forms && hbspt.forms.create) {
-              setTimeout(loadHubSpotForm, 100);
-            }
           }
         });
       }
@@ -1648,8 +1713,13 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // Load HubSpot form script and create form
       function loadHubSpotForm() {
-        // Clear previous form if exists
+        // Show preloader
+        const loader = document.getElementById('hubspot-form-loader');
         const formContainer = document.getElementById('circle-form');
+        
+        if (loader) {
+          loader.style.display = 'flex';
+        }
         if (formContainer) {
           formContainer.innerHTML = '';
         }
@@ -1670,16 +1740,18 @@ document.addEventListener('DOMContentLoaded', function() {
               target: '#circle-form'
             });
             
-            // Apply custom styling to HubSpot form fields
-            setTimeout(styleHubSpotForm, 500);
+            hubspotFormLoaded = true;
+            
+            // Apply custom styling to HubSpot form fields after form renders
+            setTimeout(function() {
+              styleHubSpotForm();
+              // Hide preloader once form is styled
+              if (loader) {
+                loader.style.display = 'none';
+              }
+            }, 800);
           }
         };
-        
-        // Remove any existing HubSpot script to avoid conflicts
-        const existingScript = document.querySelector('script[src*="js-eu1.hsforms.net"]');
-        if (existingScript && existingScript !== script) {
-          existingScript.remove();
-        }
         
         document.head.appendChild(script);
       }
@@ -1688,7 +1760,7 @@ document.addEventListener('DOMContentLoaded', function() {
       function styleHubSpotForm() {
         // Wait for form to render
         const observer = new MutationObserver(function(mutations) {
-          const formFields = document.querySelectorAll('#circle-form .hs-form-field input[type="text"], #circle-form .hs-form-field input[type="email"], #circle-form .hs-form-field input[type="tel"], #circle-form .hs-form-field select, #circle-form .hs-form-field textarea');
+          const formFields = document.querySelectorAll('#circle-form input[type="text"], #circle-form input[type="email"], #circle-form input[type="tel"], #circle-form input[type="number"], #circle-form select, #circle-form textarea');
           
           if (formFields.length > 0) {
             formFields.forEach(field => {
@@ -1702,7 +1774,7 @@ document.addEventListener('DOMContentLoaded', function() {
               field.style.border = '1px solid #e0e0e0';
               field.style.fontSize = '16px';
               field.style.backgroundColor = '#ffffff';
-              field.style.fontFamily = 'inherit';
+              field.style.fontFamily = 'Montserrat, sans-serif';
               field.style.color = '#000000';
               field.style.transition = 'border-color 0.2s ease';
               field.style.boxSizing = 'border-box';
@@ -1720,26 +1792,44 @@ document.addEventListener('DOMContentLoaded', function() {
               
               // Style placeholder text
               if (field.placeholder) {
-                field.style.color = '#000000';
+                field.style.color = '#b4b4b4';
               }
             });
             
             // Style labels
-            const labels = document.querySelectorAll('#circle-form .hs-form-field label');
+            const labels = document.querySelectorAll('#circle-form label');
             labels.forEach(label => {
               label.style.display = 'block';
               label.style.marginBottom = '6px';
               label.style.fontSize = '14px';
               label.style.fontWeight = '500';
               label.style.color = '#000000';
+              label.style.fontFamily = 'Montserrat, sans-serif';
             });
             
-            // Style form wrapper
+            // Style form wrapper/fields container
             const formWrapper = document.getElementById('circle-form');
             if (formWrapper) {
               formWrapper.style.display = 'flex';
               formWrapper.style.flexDirection = 'column';
-              formWrapper.style.gap = '12px';
+              formWrapper.style.gap = '16px';
+            }
+            
+            // Style submit button
+            const submitBtn = document.querySelector('#circle-form button[type="submit"]');
+            if (submitBtn) {
+              submitBtn.style.backgroundColor = '#144bf5';
+              submitBtn.style.color = '#ffffff';
+              submitBtn.style.borderRadius = '8px';
+              submitBtn.style.padding = '12px 24px';
+              submitBtn.style.fontSize = '16px';
+              submitBtn.style.fontFamily = 'Montserrat, sans-serif';
+              submitBtn.style.border = 'none';
+              submitBtn.style.cursor = 'pointer';
+              submitBtn.style.transition = 'background-color 0.2s ease';
+              submitBtn.addEventListener('hover', function() {
+                this.style.backgroundColor = '#0d3bb8';
+              });
             }
             
             observer.disconnect();
@@ -1748,7 +1838,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         observer.observe(document.getElementById('circle-form'), {
           childList: true,
-          subtree: true
+          subtree: true,
+          attributes: true
         });
       }
     });
