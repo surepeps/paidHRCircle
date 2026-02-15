@@ -397,14 +397,18 @@ const DynamicFormHandler = (() => {
   };
 
   /**
-   * Get current domain
+   * Initialize the form
    */
-  const getCurrentDomain = () => {
-    return window.location.href;
+  const init = () => {
+    console.log('[v0] Initializing dynamic form handler');
+    setupFormSubmission();
+    setupRecaptcha();
+    setupEventListeners();
+    setupModalScrollLock();
   };
 
   /**
-   * Submit form to HubSpot
+   * Submit form to HubSpot using public endpoint
    */
   const submitForm = async () => {
     try {
@@ -422,27 +426,23 @@ const DynamicFormHandler = (() => {
 
       console.log('[v0] Submitting form with payload:', payload);
 
-      // Get access token from backend (never expose in frontend code)
-      const accessToken = await getAccessTokenFromBackend();
+      // Use public HubSpot forms endpoint
+      const hubspotEndpoint = `https://api.hsforms.com/submissions/v3/integration/submit/${CONFIG.hubspotPortalId}/${CONFIG.hubspotFormGuid}`;
 
-      const response = await fetch(
-        `${CONFIG.hubspotApiEndpoint}/${CONFIG.hubspotPortalId}/${CONFIG.hubspotFormGuid}`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        }
-      );
+      const response = await fetch(hubspotEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
 
       hideLoadingPreloader();
 
       if (response.ok) {
         const result = await response.json();
         console.log('[v0] Form submitted successfully:', result);
-        showSuccessMessage(result.inlineMessage || 'Thanks for submitting the form.');
+        showSuccessMessage('Thanks for submitting the form! We\'ll be in touch soon.');
         resetForm();
       } else {
         console.error('[v0] Form submission failed:', response.status);
@@ -452,33 +452,6 @@ const DynamicFormHandler = (() => {
       console.error('[v0] Error submitting form:', error);
       hideLoadingPreloader();
       showErrorMessage('Sorry could not submit your request try again later..');
-    }
-  };
-
-  /**
-   * Get access token from backend
-   * This should be fetched from your backend API, never hardcoded
-   */
-  const getAccessTokenFromBackend = async () => {
-    try {
-      const response = await fetch('/api/hubspot-token', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch access token');
-      }
-
-      const data = await response.json();
-      return data.token;
-    } catch (error) {
-      console.error('[v0] Error fetching access token:', error);
-      // Fallback: try to get from environment variable (not recommended for production)
-      // In production, this should ALWAYS come from a secure backend endpoint
-      throw error;
     }
   };
 
@@ -600,6 +573,60 @@ const DynamicFormHandler = (() => {
       recaptchaToken = null;
       console.log('[v0] Form reset');
     }
+  };
+
+  /**
+   * Setup modal scroll lock
+   * Disable background scrolling when modal is open
+   */
+  const setupModalScrollLock = () => {
+    const modal = document.getElementById('lead-form-wrap');
+    const closeButton = document.querySelector('[data-w-id="e2076a19-95d5-3d61-dcc6-88f99240afcd"]');
+    
+    if (!modal) {
+      console.warn('[v0] Modal wrapper not found');
+      return;
+    }
+
+    // Function to lock scroll
+    const lockScroll = () => {
+      document.body.style.overflow = 'hidden';
+      console.log('[v0] Scroll locked - Modal opened');
+    };
+
+    // Function to unlock scroll
+    const unlockScroll = () => {
+      document.body.style.overflow = '';
+      console.log('[v0] Scroll unlocked - Modal closed');
+    };
+
+    // Watch for modal display changes
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'style') {
+          const displayStyle = modal.style.display;
+          if (displayStyle !== 'none' && displayStyle !== '') {
+            lockScroll();
+          } else {
+            unlockScroll();
+          }
+        }
+      });
+    });
+
+    observer.observe(modal, {
+      attributes: true,
+      attributeFilter: ['style'],
+    });
+
+    // Also handle close button click
+    if (closeButton) {
+      closeButton.addEventListener('click', () => {
+        unlockScroll();
+      });
+    }
+
+    console.log('[v0] Modal scroll lock setup complete');
   };
 
   // Public API

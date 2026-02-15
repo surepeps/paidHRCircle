@@ -3,6 +3,16 @@
  * Styling for the dynamic form handler, preloader, and responsive layout
  */
 
+/* Body scroll lock when modal is open */
+body {
+  overflow: auto;
+  transition: overflow 0.3s ease;
+}
+
+body.modal-open {
+  overflow: hidden;
+}
+
 /* Form Container Responsive Layout */
 .circle-form_fields {
   display: grid;
@@ -49,6 +59,19 @@
   margin-top: 12px;
 }
 
+/* Checkbox wrapper */
+.w-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.w-checkbox input {
+  margin: 0;
+  cursor: pointer;
+}
+
 /* Checkbox styling */
 .circle-checkbox {
   width: 20px;
@@ -60,6 +83,18 @@
   justify-content: center;
   transition: all 0.3s ease;
   background-color: #fff;
+  flex-shrink: 0;
+}
+
+/* Checkbox label styling */
+.circle-checkbox-label {
+  margin: 0 !important;
+  font-size: 14px;
+  color: #333;
+  font-weight: 400;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
 }
 
 .w-checkbox input:checked + span .circle-checkbox {
