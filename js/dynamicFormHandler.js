@@ -34,8 +34,13 @@ const DynamicFormHandler = (() => {
       // Set up form submission
       setupFormSubmission();
       
-      // Setup CAPTCHA
-      setupRecaptcha();
+      // Setup modal scroll lock
+      setupModalScrollLock();
+      
+      // Setup CAPTCHA with a delay to ensure form is fully rendered
+      setTimeout(() => {
+        setupRecaptcha();
+      }, 500);
       
       console.log('[v0] Form handler initialized successfully');
     } catch (error) {
@@ -181,17 +186,21 @@ const DynamicFormHandler = (() => {
     submitButton.addEventListener('click', async (e) => {
       e.preventDefault();
       
+      console.log('[v0] Submit button clicked');
+      
       if (!(await validateForm())) {
         console.log('[v0] Form validation failed');
+        alert('Please fill out all required fields');
         return;
       }
 
       if (!recaptchaToken) {
-        console.log('[v0] CAPTCHA not completed');
-        alert('Please complete the CAPTCHA verification');
+        console.log('[v0] CAPTCHA not completed, token:', recaptchaToken);
+        alert('Please complete the CAPTCHA verification before submitting');
         return;
       }
 
+      console.log('[v0] All validations passed, submitting form with CAPTCHA token:', recaptchaToken.substring(0, 20) + '...');
       await submitForm();
     });
   };
@@ -303,13 +312,18 @@ const DynamicFormHandler = (() => {
   const setupRecaptcha = () => {
     // Check if reCAPTCHA script is loaded
     if (typeof grecaptcha === 'undefined') {
-      console.warn('[v0] reCAPTCHA script not loaded');
+      console.warn('[v0] reCAPTCHA script not loaded, retrying...');
+      // Retry setup after a short delay
+      setTimeout(setupRecaptcha, 500);
       return;
     }
 
     // Create a container for reCAPTCHA if it doesn't exist
     const form = document.getElementById('wf-form-Join-Circle-Form');
-    if (!form) return;
+    if (!form) {
+      console.warn('[v0] Form not found for reCAPTCHA setup');
+      return;
+    }
 
     let recaptchaContainer = form.querySelector('#recaptcha-container');
     if (!recaptchaContainer) {
@@ -320,17 +334,25 @@ const DynamicFormHandler = (() => {
       const submitButton = form.querySelector('.circle_button.is-form-long');
       if (submitButton && submitButton.parentNode) {
         submitButton.parentNode.insertBefore(recaptchaContainer, submitButton);
+        console.log('[v0] reCAPTCHA container inserted before submit button');
+      } else {
+        form.appendChild(recaptchaContainer);
+        console.log('[v0] reCAPTCHA container appended to form');
       }
     }
 
-    // Render reCAPTCHA v3 (invisible)
-    grecaptcha.render('recaptcha-container', {
-      sitekey: '6Lf3L-4qAAAAAERPjdUuPVlXHxQ7pSwHaL5Zs7Jq',
-      callback: onRecaptchaSuccess,
-      'error-callback': onRecaptchaError,
-    });
+    try {
+      // Render reCAPTCHA v3 (invisible)
+      grecaptcha.render('recaptcha-container', {
+        sitekey: '6Lf3L-4qAAAAAERPjdUuPVlXHxQ7pSwHaL5Zs7Jq',
+        callback: 'onRecaptchaSuccess',
+        'error-callback': 'onRecaptchaError',
+      });
 
-    console.log('[v0] reCAPTCHA setup complete');
+      console.log('[v0] reCAPTCHA setup complete');
+    } catch (error) {
+      console.error('[v0] Error rendering reCAPTCHA:', error);
+    }
   };
 
   /**
@@ -412,6 +434,13 @@ const DynamicFormHandler = (() => {
    */
   const submitForm = async () => {
     try {
+      // Validate recaptcha token one more time
+      if (!recaptchaToken) {
+        console.error('[v0] reCAPTCHA token missing at submission time');
+        alert('Security verification failed. Please try again.');
+        return;
+      }
+
       // Show loading state
       showLoadingPreloader();
 
@@ -425,6 +454,7 @@ const DynamicFormHandler = (() => {
       };
 
       console.log('[v0] Submitting form with payload:', payload);
+      console.log('[v0] Using reCAPTCHA token for verification');
 
       // Use public HubSpot forms endpoint
       const hubspotEndpoint = `https://api.hsforms.com/submissions/v3/integration/submit/${CONFIG.hubspotPortalId}/${CONFIG.hubspotFormGuid}`;
@@ -444,6 +474,8 @@ const DynamicFormHandler = (() => {
         console.log('[v0] Form submitted successfully:', result);
         showSuccessMessage('Thanks for submitting the form! We\'ll be in touch soon.');
         resetForm();
+        // Reset recaptcha token after successful submission
+        recaptchaToken = null;
       } else {
         console.error('[v0] Form submission failed:', response.status);
         showErrorMessage('Sorry could not submit your request try again later..');
@@ -581,7 +613,6 @@ const DynamicFormHandler = (() => {
    */
   const setupModalScrollLock = () => {
     const modal = document.getElementById('lead-form-wrap');
-    const closeButton = document.querySelector('[data-w-id="e2076a19-95d5-3d61-dcc6-88f99240afcd"]');
     
     if (!modal) {
       console.warn('[v0] Modal wrapper not found');
@@ -590,22 +621,50 @@ const DynamicFormHandler = (() => {
 
     // Function to lock scroll
     const lockScroll = () => {
+      document.documentElement.style.overflow = 'hidden';
       document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
       console.log('[v0] Scroll locked - Modal opened');
     };
 
     // Function to unlock scroll
     const unlockScroll = () => {
+      document.documentElement.style.overflow = '';
       document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
       console.log('[v0] Scroll unlocked - Modal closed');
     };
 
-    // Watch for modal display changes
+    // Watch for modal display changes using MutationObserver
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
-        if (mutation.attributeName === 'style') {
-          const displayStyle = modal.style.display;
-          if (displayStyle !== 'none' && displayStyle !== '') {
+        const displayStyle = window.getComputedStyle(modal).display;
+        const visibilityStyle = window.getComputedStyle(modal).visibility;
+        
+        console.log('[v0] Modal state changed - display:', displayStyle, 'visibility:', visibilityStyle);
+        
+        if (displayStyle !== 'none' && visibilityStyle !== 'hidden') {
+          lockScroll();
+        } else {
+          unlockScroll();
+        }
+      });
+    });
+
+    observer.observe(modal, {
+      attributes: true,
+      attributeFilter: ['style'],
+      subtree: true,
+    });
+
+    // Also listen for class changes
+    const classObserver = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+          const displayStyle = window.getComputedStyle(modal).display;
+          if (displayStyle !== 'none') {
             lockScroll();
           } else {
             unlockScroll();
@@ -614,17 +673,10 @@ const DynamicFormHandler = (() => {
       });
     });
 
-    observer.observe(modal, {
+    classObserver.observe(modal, {
       attributes: true,
-      attributeFilter: ['style'],
+      attributeFilter: ['class'],
     });
-
-    // Also handle close button click
-    if (closeButton) {
-      closeButton.addEventListener('click', () => {
-        unlockScroll();
-      });
-    }
 
     console.log('[v0] Modal scroll lock setup complete');
   };
