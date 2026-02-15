@@ -384,7 +384,7 @@
         "fieldType": "recaptcha",
         "enabled": true,
         "visible": true,
-        "siteKey": "6Lf3L-4qAAAAAERPjdUuPVlXHxQ7pSwHaL5Zs7Jq",
+        "siteKey": "6LcUVWwsAAAAAOiKrAsWTHQKSg68armSTprtquR6",
         "version": "v2",
         "showOnlyWhenFormValid": true,
         "name": "recaptcha",
