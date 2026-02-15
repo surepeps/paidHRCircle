@@ -612,8 +612,9 @@ const DynamicFormHandler = (() => {
 
     try {
         // Render reCAPTCHA v2 checkbox
-        grecaptcha.render('recaptcha-container', {
+        grecaptcha.enterprise.render('recaptcha-container', {
         sitekey: recaptchaConfig.siteKey,
+        action: 'LOGIN',
         callback: (token) => {
             recaptchaToken = token;
             console.log('[DynamicForm] reCAPTCHA v2 verified successfully');
@@ -764,6 +765,8 @@ const DynamicFormHandler = (() => {
       });
 
       hideLoadingPreloader();
+
+      console.log(response.ok, response, "all response");
 
       if (response.ok) {
         const result = await response.json();
@@ -1087,7 +1090,7 @@ const DynamicFormHandler = (() => {
       recaptchaToken = null;
       
       if (typeof grecaptcha !== 'undefined') {
-        grecaptcha.reset();
+        grecaptcha.enterprise.reset();
       }
       
       disableSubmitButton();
