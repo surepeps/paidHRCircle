@@ -382,14 +382,14 @@
     },
     {
         "fieldType": "recaptcha",
-        "enabled": false,
+        "enabled": true,
         "visible": true,
-        "siteKey": "6LcUVWwsAAAAAOiKrAsWTHQKSg68armSTprtquR6",
-        "version": "v2",
+        "siteKey": "6Lc2a2wsAAAAAIAmhshFdBfJmN64R_Znd7g1nc2F",
+        "version": "v3",
         "showOnlyWhenFormValid": true,
         "name": "recaptcha",
         "label": "reCAPTCHA Verification",
-        "description": "Google reCAPTCHA v2"
+        "description": "Google reCAPTCHA v3"
     },
     {
         "fieldType": "submit",
