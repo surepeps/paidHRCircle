@@ -59,17 +59,23 @@ body.modal-open {
   margin-top: 12px;
 }
 
-/* Checkbox wrapper */
+/* Checkbox wrapper - flex layout for alignment */
 .w-checkbox {
-  display: flex;
+  display: flex !important;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   cursor: pointer;
+  margin: 0 !important;
 }
 
 .w-checkbox input {
-  margin: 0;
+  margin: 0 !important;
   cursor: pointer;
+}
+
+/* Checkbox input visual */
+.w-checkbox-input {
+  flex-shrink: 0;
 }
 
 /* Checkbox styling */
@@ -84,24 +90,31 @@ body.modal-open {
   transition: all 0.3s ease;
   background-color: #fff;
   flex-shrink: 0;
+  cursor: pointer;
 }
 
 /* Checkbox label styling */
 .circle-checkbox-label {
   margin: 0 !important;
+  padding: 0 !important;
   font-size: 14px;
   color: #333;
   font-weight: 400;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  white-space: nowrap;
+  line-height: 1.4;
 }
 
+/* Checked state styling */
+.w-checkbox input:checked ~ .circle-checkbox,
 .w-checkbox input:checked + span .circle-checkbox {
   background-color: #004AF5;
   border-color: #004AF5;
 }
 
+.w-checkbox input:checked ~ .circle-checkbox::after,
 .w-checkbox input:checked + span .circle-checkbox::after {
   content: '✓';
   color: white;
