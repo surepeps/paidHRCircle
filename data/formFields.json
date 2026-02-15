@@ -382,7 +382,7 @@
     },
     {
         "fieldType": "recaptcha",
-        "enabled": true,
+        "enabled": false,
         "visible": true,
         "siteKey": "6LcUVWwsAAAAAOiKrAsWTHQKSg68armSTprtquR6",
         "version": "v2",
