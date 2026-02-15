@@ -1,7 +1,6 @@
 /**
- * Dynamic Form Handler - FULLY JSON-CONTROLLED
- * All form fields, reCAPTCHA, and submit button rendered from formFields.json
- * Features: Error modal, working preloader, empty state placeholder
+ * Dynamic Form Handler
+ * Manages form field rendering, validation, and submission to HubSpot
  */
 
 const DynamicFormHandler = (() => {
@@ -11,36 +10,25 @@ const DynamicFormHandler = (() => {
     hubspotPortalId: '26055346',
     hubspotFormGuid: '66851a67-87da-466c-b329-ee915bb8312f',
     hubspotApiEndpoint: 'https://api.hsforms.com/submissions/v3/integration/secure/submit',
+    recaptchaSiteKey: '6LcUVWwsAAAAAOiKrAsWTHQKSg68armSTprtquR6',
   };
 
   let formFields = [];
   let formData = {};
   let recaptchaToken = null;
-  let recaptchaConfig = null;
-  let submitButtonConfig = null;
 
   /**
    * Initialize the dynamic form
    */
   const init = async () => {
     try {
-      console.log('[DynamicForm] Initializing...');
+      console.log('[v0] Initializing dynamic form handler');
       
       // Load form fields from JSON
       await loadFormFields();
       
-      // Extract reCAPTCHA and submit button configurations
-      extractSpecialFields();
-      
       // Render form fields dynamically
       renderFormFields();
-      
-      // Render reCAPTCHA if configured
-      if (recaptchaConfig && recaptchaConfig.enabled) {
-        setTimeout(() => {
-          setupRecaptcha();
-        }, 500);
-      }
       
       // Set up form submission
       setupFormSubmission();
@@ -48,10 +36,14 @@ const DynamicFormHandler = (() => {
       // Setup modal scroll lock
       setupModalScrollLock();
       
-      console.log('[DynamicForm] Initialization complete');
+      // Setup CAPTCHA with a delay to ensure form is fully rendered
+      setTimeout(() => {
+        setupRecaptcha();
+      }, 500);
+      
+      console.log('[v0] Form handler initialized successfully');
     } catch (error) {
-      console.error('[DynamicForm] Initialization error:', error);
-      showErrorModal('Unable to load form. Please refresh the page and try again.');
+      console.error('[v0] Error initializing form handler:', error);
     }
   };
 
@@ -60,104 +52,70 @@ const DynamicFormHandler = (() => {
    */
   const loadFormFields = async () => {
     try {
-      console.log('[DynamicForm] Loading form fields from:', CONFIG.formFieldsUrl);
-      
       const response = await fetch(CONFIG.formFieldsUrl);
-      
       if (!response.ok) {
-        throw new Error(`Failed to load form fields: HTTP ${response.status}`);
+        throw new Error(`Failed to load form fields: ${response.statusText}`);
       }
-      
-      const data = await response.json();
-      
-      if (!Array.isArray(data) || data.length === 0) {
-        throw new Error('Form configuration is empty or invalid');
-      }
-      
-      formFields = data;
-      console.log('[DynamicForm] ✓ Loaded', formFields.length, 'form items');
-      
+      formFields = await response.json();
+      console.log('[v0] Form fields loaded:', formFields.length);
     } catch (error) {
-      console.error('[DynamicForm] Error loading form fields:', error);
+      console.error('[v0] Error loading form fields:', error);
       throw error;
     }
-  };
-
-  /**
-   * Extract special field types (recaptcha, submit button) from form fields
-   */
-  const extractSpecialFields = () => {
-    // Find and extract reCAPTCHA config
-    const recaptchaIndex = formFields.findIndex(field => field.fieldType === 'recaptcha');
-    if (recaptchaIndex !== -1) {
-      recaptchaConfig = formFields[recaptchaIndex];
-      console.log('[DynamicForm] ✓ reCAPTCHA config found');
-    }
-
-    // Find and extract submit button config
-    const submitIndex = formFields.findIndex(field => field.fieldType === 'submit');
-    if (submitIndex !== -1) {
-      submitButtonConfig = formFields[submitIndex];
-      console.log('[DynamicForm] ✓ Submit button config found');
-    }
-
-    // Remove special fields from formFields array (they'll be rendered separately)
-    formFields = formFields.filter(field => 
-      field.fieldType !== 'recaptcha' && field.fieldType !== 'submit'
-    );
-    
-    console.log('[DynamicForm] Regular form fields count:', formFields.length);
   };
 
   /**
    * Render form fields dynamically
    */
   const renderFormFields = () => {
-    console.log('[DynamicForm] Starting renderFormFields...');
+    console.log('[v0] Starting renderFormFields...');
     
     const fieldsContainer = document.querySelector('.circle-form_fields');
     
     if (!fieldsContainer) {
-      console.error('[DynamicForm] ❌ Form fields container not found!');
-      showErrorModal('Form container not found. Please refresh the page.');
+      console.error('[v0] ❌ ERROR: Form fields container ".circle-form_fields" not found in DOM!');
+      console.error('[v0] Make sure your HTML has: <div class="circle-form_fields"></div>');
       return;
     }
 
-    // Clear existing content
+    console.log('[v0] ✓ Fields container found:', fieldsContainer);
+    console.log('[v0] Rendering', formFields.length, 'fields...');
+
+    // Clear existing fields
     fieldsContainer.innerHTML = '';
 
-    // Check if we have any fields to render
-    if (formFields.length === 0) {
-      renderEmptyState(fieldsContainer);
-      return;
-    }
-
-    // Render regular form fields
     let i = 0;
     while (i < formFields.length) {
       const currentField = formFields[i];
       
+      // Check if it's a checkbox group (single field taking full width)
       if (currentField.fieldType === 'checkbox') {
         const wrapper = document.createElement('div');
         wrapper.className = 'field-wrapper';
         wrapper.style.gridColumn = '1 / -1';
         wrapper.innerHTML = renderCheckboxField(currentField);
         fieldsContainer.appendChild(wrapper);
+        console.log('[v0] ✓ Rendered checkbox group:', currentField.name);
         i++;
       } else {
+        // Regular field pair - try to pair with next field if it's not a checkbox
         const wrapper = document.createElement('div');
         wrapper.className = 'form-field-wrappper';
         
+        // Add first field
         const fieldDiv1 = document.createElement('div');
         fieldDiv1.className = 'field-wrapper';
         fieldDiv1.innerHTML = renderField(currentField);
         wrapper.appendChild(fieldDiv1);
+        console.log('[v0] ✓ Rendered field:', currentField.name);
         
+        // Check if we can add a second field (not last field and next field is not checkbox)
         if (i + 1 < formFields.length && formFields[i + 1].fieldType !== 'checkbox') {
           const fieldDiv2 = document.createElement('div');
           fieldDiv2.className = 'field-wrapper';
           fieldDiv2.innerHTML = renderField(formFields[i + 1]);
           wrapper.appendChild(fieldDiv2);
+          console.log('[v0] ✓ Rendered field:', formFields[i + 1].name);
           i += 2;
         } else {
           i++;
@@ -167,58 +125,13 @@ const DynamicFormHandler = (() => {
       }
     }
 
-    console.log('[DynamicForm] ✓ Regular form fields rendered');
-    
-    // Now render reCAPTCHA and submit button from JSON config
-    const form = document.getElementById('wf-form-Join-Circle-Form');
-    if (form) {
-      // Render reCAPTCHA container
-      if (recaptchaConfig && recaptchaConfig.enabled) {
-        renderRecaptchaContainer(form);
-      }
-      
-      // Render submit button
-      if (submitButtonConfig && submitButtonConfig.enabled !== false) {
-        renderSubmitButton(form);
-      }
-    }
+    console.log('[v0] ✓✓✓ Form fields rendered successfully! ✓✓✓');
+    console.log('[v0] Total field groups created:', fieldsContainer.children.length);
     
     // Add validation listeners after fields are rendered
     setTimeout(() => {
       addValidationListeners();
     }, 100);
-  };
-
-  /**
-   * Render empty state when no fields are available
-   */
-  const renderEmptyState = (container) => {
-    const emptyStateHTML = `
-      <div class="form-empty-state" style="
-        padding: 60px 20px;
-        text-align: center;
-        color: #666;
-        font-size: 16px;
-      ">
-        <div style="
-          width: 80px;
-          height: 80px;
-          margin: 0 auto 20px;
-          border: 3px solid #e0e0e0;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 40px;
-          color: #ccc;
-        ">📋</div>
-        <h3 style="margin: 0 0 10px; color: #333; font-size: 20px;">Form Configuration Required</h3>
-        <p style="margin: 0; max-width: 400px; margin: 0 auto;">
-          No form fields have been configured yet. Please check the formFields.json file.
-        </p>
-      </div>
-    `;
-    container.innerHTML = emptyStateHTML;
   };
 
   /**
@@ -229,12 +142,14 @@ const DynamicFormHandler = (() => {
     const isRequired = field.required ? 'required' : '';
     const placeholder = field.placeholder || field.unselectedLabel || '';
 
+    // Add data attribute for field mapping
     let fieldHTML = `<label for="${fieldId}" class="field-label hide">${field.label || placeholder}</label>`;
 
     if (field.fieldType === 'select') {
       fieldHTML += `<select id="${fieldId}" name="${fieldId}" data-name="${field.name}" ${isRequired} class="form-input-field is-circle-select w-select" data-field-name="${field.name}" data-object-type-id="${field.objectTypeId}">`;
       fieldHTML += `<option value="">${placeholder}...</option>`;
       
+      // Render options from the field data
       if (field.options && field.options.length > 0) {
         field.options.forEach((option) => {
           fieldHTML += `<option value="${option.value}">${option.label}</option>`;
@@ -258,6 +173,7 @@ const DynamicFormHandler = (() => {
   const renderCheckboxField = (field) => {
     let fieldHTML = `<div class="field-label">${field.label}</div><div class="circle-form_option-wrap">`;
 
+    // Render checkbox options from field data
     if (field.options && field.options.length > 0) {
       field.options.forEach((option) => {
         const checkboxId = `${field.name}_${option.value.replace(/\s+/g, '_').toLowerCase()}`;
@@ -276,130 +192,19 @@ const DynamicFormHandler = (() => {
   };
 
   /**
-   * Render reCAPTCHA container from JSON config
-   */
-  const renderRecaptchaContainer = (form) => {
-    let recaptchaContainer = form.querySelector('#recaptcha-container');
-    
-    if (!recaptchaContainer) {
-      recaptchaContainer = document.createElement('div');
-      recaptchaContainer.id = 'recaptcha-container';
-      recaptchaContainer.style.margin = '20px 0';
-      
-      // Control visibility based on JSON config
-      if (recaptchaConfig.showOnlyWhenFormValid) {
-        recaptchaContainer.style.display = 'none';
-      }
-      
-      recaptchaContainer.style.transition = 'opacity 0.3s ease';
-      
-      form.appendChild(recaptchaContainer);
-      console.log('[DynamicForm] ✓ reCAPTCHA container created');
-    }
-  };
-
-  /**
-   * Render submit button from JSON config
-   */
-  const renderSubmitButton = (form) => {
-    // Remove any existing submit buttons from HTML
-    const existingButtons = form.querySelectorAll('.circle_button.is-form-long, button[type="submit"], input[type="submit"]');
-    existingButtons.forEach(btn => btn.remove());
-
-    // Create button from JSON config
-    const submitButton = document.createElement('a');
-    submitButton.href = '#';
-    submitButton.className = submitButtonConfig.buttonClasses || 'circle_button is-form-long w-inline-block';
-    
-    const buttonBg = document.createElement('div');
-    buttonBg.className = 'circle_btn-bg';
-    
-    const buttonText = document.createElement('div');
-    buttonText.textContent = submitButtonConfig.buttonText || submitButtonConfig.text || 'Submit';
-    buttonBg.appendChild(buttonText);
-    
-    if (submitButtonConfig.buttonIcon) {
-      const iconDiv = document.createElement('div');
-      iconDiv.className = 'icon-size-20px w-embed';
-      iconDiv.innerHTML = submitButtonConfig.buttonIcon;
-      buttonBg.appendChild(iconDiv);
-    }
-    
-    const buttonBlBg = document.createElement('div');
-    buttonBlBg.className = 'circle_btn-bl-bg';
-    
-    submitButton.appendChild(buttonBg);
-    submitButton.appendChild(buttonBlBg);
-    
-    form.appendChild(submitButton);
-    console.log('[DynamicForm] ✓ Submit button created from JSON');
-    
-    // Apply initial disabled state
-    if (submitButtonConfig.disabledState) {
-      applyButtonState(submitButton, submitButtonConfig.disabledState);
-    }
-  };
-
-  /**
-   * Apply button state (enabled or disabled)
-   */
-  const applyButtonState = (button, stateConfig) => {
-    const buttonBg = button.querySelector('.circle_btn-bg');
-    const buttonText = button.querySelector('.circle_btn-bg > div:first-child');
-    
-    if (stateConfig.opacity) button.style.opacity = stateConfig.opacity;
-    if (stateConfig.cursor) button.style.cursor = stateConfig.cursor;
-    if (stateConfig.pointerEvents !== undefined) {
-      button.style.pointerEvents = stateConfig.pointerEvents === false ? 'none' : 'auto';
-    }
-    
-    if (buttonBg && stateConfig.backgroundColor !== undefined) {
-      buttonBg.style.backgroundColor = stateConfig.backgroundColor;
-    }
-    
-    if (buttonText && stateConfig.color !== undefined) {
-      buttonText.style.color = stateConfig.color;
-    }
-  };
-
-  /**
-   * Enable submit button
-   */
-  const enableSubmitButton = () => {
-    const submitButton = document.querySelector('.circle_button.is-form-long');
-    if (!submitButton || !submitButtonConfig) return;
-    
-    submitButton.disabled = false;
-    applyButtonState(submitButton, submitButtonConfig.enabledState);
-    console.log('[DynamicForm] Submit button ENABLED');
-  };
-
-  /**
-   * Disable submit button
-   */
-  const disableSubmitButton = () => {
-    const submitButton = document.querySelector('.circle_button.is-form-long');
-    if (!submitButton || !submitButtonConfig) return;
-    
-    submitButton.disabled = true;
-    applyButtonState(submitButton, submitButtonConfig.disabledState);
-    console.log('[DynamicForm] Submit button DISABLED');
-  };
-
-  /**
    * Setup form submission
    */
   const setupFormSubmission = () => {
     const submitButton = document.querySelector('.circle_button.is-form-long');
     if (!submitButton) {
-      console.warn('[DynamicForm] Submit button not found');
+      console.warn('[v0] Submit button not found');
       return;
     }
 
     // Initially disable the button
     disableSubmitButton();
 
-    // Add event listeners for real-time validation
+    // Add event listeners to form inputs for real-time validation
     const form = document.getElementById('wf-form-Join-Circle-Form');
     if (form) {
       const inputs = form.querySelectorAll('input[data-field-name], select[data-field-name], textarea[data-field-name]');
@@ -412,22 +217,21 @@ const DynamicFormHandler = (() => {
     submitButton.addEventListener('click', async (e) => {
       e.preventDefault();
       
-      console.log('[DynamicForm] Submit button clicked');
+      console.log('[v0] Submit button clicked');
       
       if (!(await validateForm())) {
-        console.log('[DynamicForm] Form validation failed');
-        showErrorModal('Please fill out all required fields correctly.');
+        console.log('[v0] Form validation failed');
+        alert('Please fill out all required fields');
         return;
       }
 
-      // Check reCAPTCHA if enabled
-      if (recaptchaConfig && recaptchaConfig.enabled && !recaptchaToken) {
-        console.log('[DynamicForm] reCAPTCHA not completed');
-        showErrorModal('Please complete the reCAPTCHA verification before submitting.');
+      if (!recaptchaToken) {
+        console.log('[v0] CAPTCHA not completed, token:', recaptchaToken);
+        alert('Please complete the CAPTCHA verification before submitting');
         return;
       }
 
-      console.log('[DynamicForm] All validations passed, submitting form');
+      console.log('[v0] All validations passed, submitting form with CAPTCHA token:', recaptchaToken.substring(0, 20) + '...');
       await submitForm();
     });
   };
@@ -440,18 +244,18 @@ const DynamicFormHandler = (() => {
     if (!submitButton) return;
 
     const isFormValid = isFormFieldsValid();
-    const isCaptchaValid = recaptchaConfig && recaptchaConfig.enabled ? recaptchaToken !== null : true;
+    const isCaptchaValid = recaptchaToken !== null;
 
-    // Update reCAPTCHA visibility if configured
-    if (recaptchaConfig && recaptchaConfig.enabled && recaptchaConfig.showOnlyWhenFormValid) {
-      updateRecaptchaVisibility();
-    }
+    // Update reCAPTCHA visibility
+    updateRecaptchaVisibility();
 
     if (isFormValid && isCaptchaValid) {
       enableSubmitButton();
     } else {
       disableSubmitButton();
     }
+
+    console.log('[v0] Button state updated - Form valid:', isFormValid, 'CAPTCHA valid:', isCaptchaValid);
   };
 
   /**
@@ -466,6 +270,7 @@ const DynamicFormHandler = (() => {
     for (const input of inputs) {
       if (input.hasAttribute('required')) {
         if (input.type === 'checkbox') {
+          // For checkboxes, check if at least one is checked in the group
           const checkboxGroup = form.querySelectorAll(`input[name="${input.name}"]`);
           const anyChecked = Array.from(checkboxGroup).some((cb) => cb.checked);
           if (!anyChecked) {
@@ -481,17 +286,71 @@ const DynamicFormHandler = (() => {
   };
 
   /**
+   * Enable submit button
+   */
+  const enableSubmitButton = () => {
+    const submitButton = document.querySelector('.circle_button.is-form-long');
+    const buttonBg = submitButton ? submitButton.querySelector('.circle_btn-bg') : null;
+    const buttonText = submitButton ? submitButton.querySelector('.circle_btn-bg > div:first-child') : null;
+    
+    if (submitButton && buttonBg) {
+      submitButton.disabled = false;
+      submitButton.style.opacity = '1';
+      submitButton.style.cursor = 'pointer';
+      submitButton.style.pointerEvents = 'auto';
+      
+      // Restore original colors
+      buttonBg.style.backgroundColor = '';
+      buttonBg.style.color = '';
+      
+      if (buttonText) {
+        buttonText.style.color = '';
+      }
+      
+      console.log('[v0] Submit button ENABLED');
+    }
+  };
+
+  /**
+   * Disable submit button
+   */
+  const disableSubmitButton = () => {
+    const submitButton = document.querySelector('.circle_button.is-form-long');
+    const buttonBg = submitButton ? submitButton.querySelector('.circle_btn-bg') : null;
+    const buttonText = submitButton ? submitButton.querySelector('.circle_btn-bg > div:first-child') : null;
+    
+    if (submitButton && buttonBg) {
+      submitButton.disabled = true;
+      submitButton.style.opacity = '0.5';
+      submitButton.style.cursor = 'not-allowed';
+      submitButton.style.pointerEvents = 'none';
+      
+      // Gray out the button
+      buttonBg.style.backgroundColor = '#cccccc';
+      buttonBg.style.color = '#666666';
+      
+      if (buttonText) {
+        buttonText.style.color = '#666666';
+      }
+      
+      console.log('[v0] Submit button DISABLED');
+    }
+  };
+
+  /**
    * Validate form fields
    */
   const validateForm = () => {
     const form = document.getElementById('wf-form-Join-Circle-Form');
     if (!form) return false;
 
+    // Get all form inputs
     const inputs = form.querySelectorAll('input[data-field-name], select[data-field-name], textarea[data-field-name]');
     let isValid = true;
     let firstInvalidField = null;
 
     inputs.forEach((input) => {
+      // Remove previous error styling
       input.style.borderColor = '';
       input.style.borderWidth = '';
       
@@ -499,12 +358,15 @@ const DynamicFormHandler = (() => {
         let fieldValid = true;
         
         if (input.type === 'checkbox') {
+          // For checkboxes, check if at least one is checked in the group
           const checkboxGroup = form.querySelectorAll(`input[name="${input.name}"]`);
           const anyChecked = Array.from(checkboxGroup).some((cb) => cb.checked);
           if (!anyChecked) {
             fieldValid = false;
             isValid = false;
+            console.log('[v0] Required checkbox group not filled:', input.name);
             
+            // Add red border to checkbox wrapper
             const checkboxWrapper = input.closest('.circle-form_option-wrap');
             if (checkboxWrapper) {
               checkboxWrapper.style.border = '2px solid #ff0000';
@@ -514,6 +376,7 @@ const DynamicFormHandler = (() => {
             
             if (!firstInvalidField) firstInvalidField = input;
           } else {
+            // Remove error styling from checkbox wrapper
             const checkboxWrapper = input.closest('.circle-form_option-wrap');
             if (checkboxWrapper) {
               checkboxWrapper.style.border = '';
@@ -523,7 +386,9 @@ const DynamicFormHandler = (() => {
         } else if (input.value.trim() === '') {
           fieldValid = false;
           isValid = false;
+          console.log('[v0] Required field empty:', input.name);
           
+          // Add red border to input
           input.style.borderColor = '#ff0000';
           input.style.borderWidth = '2px';
           
@@ -532,6 +397,7 @@ const DynamicFormHandler = (() => {
       }
     });
 
+    // Scroll to first invalid field if any
     if (firstInvalidField && firstInvalidField.type !== 'checkbox') {
       firstInvalidField.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setTimeout(() => firstInvalidField.focus(), 500);
@@ -552,8 +418,10 @@ const DynamicFormHandler = (() => {
     inputs.forEach((input) => {
       if (input.hasAttribute('required')) {
         
+        // Add listener for input/change events
         const validateInput = () => {
           if (input.type === 'checkbox') {
+            // Check checkbox group
             const checkboxGroup = form.querySelectorAll(`input[name="${input.name}"]`);
             const anyChecked = Array.from(checkboxGroup).some((cb) => cb.checked);
             const checkboxWrapper = input.closest('.circle-form_option-wrap');
@@ -569,6 +437,7 @@ const DynamicFormHandler = (() => {
               }
             }
           } else {
+            // Regular input validation
             if (input.value.trim() === '') {
               input.style.borderColor = '#ff0000';
               input.style.borderWidth = '2px';
@@ -578,6 +447,7 @@ const DynamicFormHandler = (() => {
             }
           }
           
+          // Update button state
           updateButtonState();
         };
         
@@ -592,42 +462,57 @@ const DynamicFormHandler = (() => {
    * Setup reCAPTCHA
    */
   const setupRecaptcha = () => {
-    if (!recaptchaConfig || !recaptchaConfig.enabled) {
-      console.log('[DynamicForm] reCAPTCHA disabled');
-      return;
-    }
-
+    // Check if reCAPTCHA script is loaded
     if (typeof grecaptcha === 'undefined') {
-      console.warn('[DynamicForm] reCAPTCHA script not loaded, retrying...');
+      console.warn('[v0] reCAPTCHA script not loaded, retrying...');
+      // Retry setup after a short delay
       setTimeout(setupRecaptcha, 500);
       return;
     }
 
-    const recaptchaContainer = document.querySelector('#recaptcha-container');
-    if (!recaptchaContainer) {
-      console.warn('[DynamicForm] reCAPTCHA container not found');
+    // Create a container for reCAPTCHA if it doesn't exist
+    const form = document.getElementById('wf-form-Join-Circle-Form');
+    if (!form) {
+      console.warn('[v0] Form not found for reCAPTCHA setup');
       return;
     }
 
+    let recaptchaContainer = form.querySelector('#recaptcha-container');
+    if (!recaptchaContainer) {
+      recaptchaContainer = document.createElement('div');
+      recaptchaContainer.id = 'recaptcha-container';
+      recaptchaContainer.style.margin = '20px 0';
+      recaptchaContainer.style.display = 'none'; // Initially hidden
+      recaptchaContainer.style.transition = 'opacity 0.3s ease';
+      
+      // Find the submit button
+      const submitButton = form.querySelector('.circle_button.is-form-long');
+      if (submitButton) {
+        // Insert reCAPTCHA container right before the submit button
+        submitButton.parentNode.insertBefore(recaptchaContainer, submitButton);
+        console.log('[v0] reCAPTCHA container inserted before submit button');
+      } else {
+        console.warn('[v0] Submit button not found, appending reCAPTCHA to form');
+        form.appendChild(recaptchaContainer);
+      }
+    }
+
     try {
+      // Render reCAPTCHA v2 checkbox
       grecaptcha.render('recaptcha-container', {
-        sitekey: recaptchaConfig.siteKey,
+        sitekey: CONFIG.recaptchaSiteKey,
         callback: 'onRecaptchaSuccess',
         'error-callback': 'onRecaptchaError',
         'expired-callback': 'onRecaptchaExpired'
       });
 
-      console.log('[DynamicForm] ✓ reCAPTCHA setup complete');
+      console.log('[v0] reCAPTCHA setup complete');
       
-      // Set initial visibility
-      if (recaptchaConfig.showOnlyWhenFormValid) {
-        updateRecaptchaVisibility();
-      } else {
-        recaptchaContainer.style.display = recaptchaConfig.visible !== false ? 'block' : 'none';
-      }
+      // Check form validity to show/hide reCAPTCHA
+      updateRecaptchaVisibility();
       
     } catch (error) {
-      console.error('[DynamicForm] Error rendering reCAPTCHA:', error);
+      console.error('[v0] Error rendering reCAPTCHA:', error);
     }
   };
 
@@ -635,40 +520,48 @@ const DynamicFormHandler = (() => {
    * Update reCAPTCHA visibility based on form validity
    */
   const updateRecaptchaVisibility = () => {
-    if (!recaptchaConfig || !recaptchaConfig.showOnlyWhenFormValid) return;
-    
     const recaptchaContainer = document.querySelector('#recaptcha-container');
     if (!recaptchaContainer) return;
 
     const isFormValid = isFormFieldsValid();
     
     if (isFormValid) {
+      // Show reCAPTCHA when all required fields are filled
       recaptchaContainer.style.display = 'block';
       recaptchaContainer.style.opacity = '1';
+      console.log('[v0] reCAPTCHA displayed - form fields valid');
     } else {
+      // Hide reCAPTCHA when required fields are not filled
       recaptchaContainer.style.display = 'none';
       recaptchaContainer.style.opacity = '0';
+      console.log('[v0] reCAPTCHA hidden - form fields incomplete');
     }
   };
 
   /**
-   * reCAPTCHA callbacks
+   * reCAPTCHA success callback
    */
   window.onRecaptchaSuccess = (token) => {
     recaptchaToken = token;
-    console.log('[DynamicForm] reCAPTCHA verified');
+    console.log('[v0] reCAPTCHA token received');
     updateButtonState();
   };
 
+  /**
+   * reCAPTCHA error callback
+   */
   window.onRecaptchaError = () => {
     recaptchaToken = null;
-    console.log('[DynamicForm] reCAPTCHA error');
+    console.log('[v0] reCAPTCHA verification failed');
     updateButtonState();
   };
 
+  /**
+   * reCAPTCHA expired callback
+   */
   window.onRecaptchaExpired = () => {
     recaptchaToken = null;
-    console.log('[DynamicForm] reCAPTCHA expired');
+    console.log('[v0] reCAPTCHA token expired');
     updateButtonState();
   };
 
@@ -682,6 +575,7 @@ const DynamicFormHandler = (() => {
     const fields = [];
     const processedFields = new Set();
 
+    // Get all form inputs
     const inputs = form.querySelectorAll('input[data-field-name], select[data-field-name], textarea[data-field-name]');
 
     inputs.forEach((input) => {
@@ -689,6 +583,7 @@ const DynamicFormHandler = (() => {
       const objectTypeId = input.getAttribute('data-object-type-id');
 
       if (input.type === 'checkbox') {
+        // Handle checkbox groups
         if (!processedFields.has(fieldName)) {
           processedFields.add(fieldName);
           
@@ -716,16 +611,18 @@ const DynamicFormHandler = (() => {
   };
 
   /**
-   * Submit form to HubSpot
+   * Submit form to HubSpot using public endpoint
    */
   const submitForm = async () => {
     try {
-      if (recaptchaConfig && recaptchaConfig.enabled && !recaptchaToken) {
-        console.error('[DynamicForm] reCAPTCHA token missing');
-        showErrorModal('Security verification failed. Please complete the reCAPTCHA and try again.');
+      // Validate recaptcha token one more time
+      if (!recaptchaToken) {
+        console.error('[v0] reCAPTCHA token missing at submission time');
+        alert('Security verification failed. Please try again.');
         return;
       }
 
+      // Show loading state
       showLoadingPreloader();
 
       const formData = collectFormData();
@@ -737,8 +634,10 @@ const DynamicFormHandler = (() => {
         },
       };
 
-      console.log('[DynamicForm] Submitting form...');
+      console.log('[v0] Submitting form with payload:', payload);
+      console.log('[v0] Using reCAPTCHA token for verification');
 
+      // Use public HubSpot forms endpoint
       const hubspotEndpoint = `https://api.hsforms.com/submissions/v3/integration/submit/${CONFIG.hubspotPortalId}/${CONFIG.hubspotFormGuid}`;
 
       const response = await fetch(hubspotEndpoint, {
@@ -753,19 +652,25 @@ const DynamicFormHandler = (() => {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('[DynamicForm] Form submitted successfully:', result);
+        console.log('[v0] Form submitted successfully:', result);
         showSuccessMessage('Thanks for submitting the form! We\'ll be in touch soon.');
         resetForm();
+        // Reset recaptcha token after successful submission
         recaptchaToken = null;
+        // Reset the reCAPTCHA widget
+        if (typeof grecaptcha !== 'undefined') {
+          grecaptcha.reset();
+        }
       } else {
+        console.error('[v0] Form submission failed:', response.status);
         const errorText = await response.text();
-        console.error('[DynamicForm] Form submission failed:', response.status, errorText);
-        showErrorModal('Sorry, we could not submit your request. Please try again later.');
+        console.error('[v0] Error details:', errorText);
+        showErrorMessage('Sorry could not submit your request try again later..');
       }
     } catch (error) {
-      console.error('[DynamicForm] Error submitting form:', error);
+      console.error('[v0] Error submitting form:', error);
       hideLoadingPreloader();
-      showErrorModal('An unexpected error occurred. Please check your connection and try again.');
+      showErrorMessage('Sorry could not submit your request try again later..');
     }
   };
 
@@ -774,21 +679,19 @@ const DynamicFormHandler = (() => {
    */
   const showLoadingPreloader = () => {
     let preloader = document.getElementById('form-preloader');
-    
     if (!preloader) {
       preloader = document.createElement('div');
       preloader.id = 'form-preloader';
       preloader.className = 'form-preloader';
       preloader.innerHTML = `
-        <div class="preloader-overlay"></div>
         <div class="preloader-content">
-          <div class="preloader-spinner"></div>
-          <p class="preloader-text">Submitting your request...</p>
+          <div class="spinner"></div>
+          <p>Submitting your request...</p>
         </div>
       `;
       document.body.appendChild(preloader);
       
-      // Add styles if not already present
+      // Add styles if not already added
       if (!document.getElementById('preloader-styles')) {
         const style = document.createElement('style');
         style.id = 'preloader-styles';
@@ -799,74 +702,42 @@ const DynamicFormHandler = (() => {
             left: 0;
             right: 0;
             bottom: 0;
-            z-index: 10000;
+            background: rgba(0, 0, 0, 0.5);
             display: flex;
             align-items: center;
             justify-content: center;
+            z-index: 9999;
           }
-          
-          .preloader-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(4px);
-          }
-          
           .preloader-content {
-            position: relative;
             background: white;
-            padding: 48px 40px;
-            border-radius: 12px;
+            padding: 40px;
+            border-radius: 8px;
             text-align: center;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 90%;
-            animation: preloaderFadeIn 0.3s ease;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
           }
-          
-          @keyframes preloaderFadeIn {
-            from {
-              opacity: 0;
-              transform: scale(0.9) translateY(20px);
-            }
-            to {
-              opacity: 1;
-              transform: scale(1) translateY(0);
-            }
-          }
-          
-          .preloader-spinner {
-            width: 56px;
-            height: 56px;
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid #004AF5;
+          .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #004AF5;
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin: 0 auto 24px;
+            margin: 0 auto 20px;
           }
-          
           @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
           }
-          
-          .preloader-text {
+          .preloader-content p {
             margin: 0;
             color: #333;
-            font-size: 16px;
-            font-weight: 500;
             font-family: inherit;
           }
         `;
         document.head.appendChild(style);
       }
     }
-    
     preloader.style.display = 'flex';
-    // Prevent body scroll
-    document.body.style.overflow = 'hidden';
   };
 
   /**
@@ -877,168 +748,6 @@ const DynamicFormHandler = (() => {
     if (preloader) {
       preloader.style.display = 'none';
     }
-    // Restore body scroll
-    document.body.style.overflow = '';
-  };
-
-  /**
-   * Show error modal
-   */
-  const showErrorModal = (message) => {
-    // Remove existing error modal if any
-    const existingModal = document.getElementById('error-modal');
-    if (existingModal) {
-      existingModal.remove();
-    }
-
-    const modal = document.createElement('div');
-    modal.id = 'error-modal';
-    modal.className = 'error-modal';
-    modal.innerHTML = `
-      <div class="error-modal-overlay"></div>
-      <div class="error-modal-content">
-        <div class="error-modal-icon">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="12" cy="12" r="10" stroke="#FF4757" stroke-width="2"/>
-            <path d="M12 8V12" stroke="#FF4757" stroke-width="2" stroke-linecap="round"/>
-            <circle cx="12" cy="16" r="1" fill="#FF4757"/>
-          </svg>
-        </div>
-        <h3 class="error-modal-title">Oops!</h3>
-        <p class="error-modal-message">${message}</p>
-        <button class="error-modal-button" onclick="document.getElementById('error-modal').remove()">
-          Got it
-        </button>
-      </div>
-    `;
-
-    // Add styles if not already present
-    if (!document.getElementById('error-modal-styles')) {
-      const style = document.createElement('style');
-      style.id = 'error-modal-styles';
-      style.textContent = `
-        .error-modal {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          z-index: 10001;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          animation: errorModalFadeIn 0.3s ease;
-        }
-        
-        @keyframes errorModalFadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-        
-        .error-modal-overlay {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.7);
-          backdrop-filter: blur(4px);
-        }
-        
-        .error-modal-content {
-          position: relative;
-          background: white;
-          padding: 40px 32px 32px;
-          border-radius: 16px;
-          text-align: center;
-          box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
-          max-width: 440px;
-          width: 90%;
-          animation: errorModalSlideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-        
-        @keyframes errorModalSlideUp {
-          from {
-            opacity: 0;
-            transform: scale(0.8) translateY(40px);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-          }
-        }
-        
-        .error-modal-icon {
-          margin: 0 auto 20px;
-          animation: errorIconPulse 0.6s ease;
-        }
-        
-        @keyframes errorIconPulse {
-          0%, 100% {
-            transform: scale(1);
-          }
-          50% {
-            transform: scale(1.1);
-          }
-        }
-        
-        .error-modal-title {
-          margin: 0 0 12px;
-          color: #FF4757;
-          font-size: 24px;
-          font-weight: 600;
-          font-family: inherit;
-        }
-        
-        .error-modal-message {
-          margin: 0 0 28px;
-          color: #555;
-          font-size: 15px;
-          line-height: 1.6;
-          font-family: inherit;
-        }
-        
-        .error-modal-button {
-          background: #004AF5;
-          color: white;
-          border: none;
-          padding: 14px 32px;
-          border-radius: 8px;
-          font-size: 15px;
-          font-weight: 600;
-          cursor: pointer;
-          font-family: inherit;
-          transition: all 0.2s ease;
-          min-width: 120px;
-        }
-        
-        .error-modal-button:hover {
-          background: #0039C4;
-          transform: translateY(-2px);
-          box-shadow: 0 8px 20px rgba(0, 74, 245, 0.3);
-        }
-        
-        .error-modal-button:active {
-          transform: translateY(0);
-        }
-      `;
-      document.head.appendChild(style);
-    }
-
-    document.body.appendChild(modal);
-    
-    // Prevent body scroll
-    document.body.style.overflow = 'hidden';
-    
-    // Auto-remove on overlay click
-    modal.querySelector('.error-modal-overlay').addEventListener('click', () => {
-      modal.remove();
-      document.body.style.overflow = '';
-    });
   };
 
   /**
@@ -1049,7 +758,10 @@ const DynamicFormHandler = (() => {
     const formInner = document.querySelector('.circle-form_inner');
     
     if (successDiv && formInner) {
+      // Hide the form
       formInner.style.display = 'none';
+      
+      // Show success message
       successDiv.style.display = 'block';
       
       const ineligibleDiv = successDiv.querySelector('#ineligible');
@@ -1059,7 +771,21 @@ const DynamicFormHandler = (() => {
           <div class="text-size-regular">${message}<br><br>Love, <br><br>The Circle Team 💙</div>
         `;
       }
-      console.log('[DynamicForm] Success message displayed');
+      console.log('[v0] Success message displayed');
+    }
+  };
+
+  /**
+   * Show error message
+   */
+  const showErrorMessage = (message) => {
+    const errorDiv = document.querySelector('.error-message_wrap');
+    if (errorDiv) {
+      errorDiv.innerHTML = `<div>${message}</div>`;
+      errorDiv.style.display = 'block';
+      console.log('[v0] Error message displayed');
+    } else {
+      alert(message);
     }
   };
 
@@ -1072,44 +798,53 @@ const DynamicFormHandler = (() => {
       form.reset();
       recaptchaToken = null;
       
+      // Reset reCAPTCHA
       if (typeof grecaptcha !== 'undefined') {
         grecaptcha.reset();
       }
       
       disableSubmitButton();
-      console.log('[DynamicForm] Form reset');
+      console.log('[v0] Form reset');
     }
   };
 
   /**
    * Setup modal scroll lock
+   * Disable background scrolling when modal is open
    */
   const setupModalScrollLock = () => {
     const modal = document.getElementById('lead-form-wrap');
     
     if (!modal) {
-      console.warn('[DynamicForm] Modal wrapper not found');
+      console.warn('[v0] Modal wrapper not found');
       return;
     }
 
+    // Function to lock scroll
     const lockScroll = () => {
       document.documentElement.style.overflow = 'hidden';
       document.body.style.overflow = 'hidden';
       document.body.style.position = 'fixed';
       document.body.style.width = '100%';
+      console.log('[v0] Scroll locked - Modal opened');
     };
 
+    // Function to unlock scroll
     const unlockScroll = () => {
       document.documentElement.style.overflow = '';
       document.body.style.overflow = '';
       document.body.style.position = '';
       document.body.style.width = '';
+      console.log('[v0] Scroll unlocked - Modal closed');
     };
 
+    // Watch for modal display changes using MutationObserver
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         const displayStyle = window.getComputedStyle(modal).display;
         const visibilityStyle = window.getComputedStyle(modal).visibility;
+        
+        console.log('[v0] Modal state changed - display:', displayStyle, 'visibility:', visibilityStyle);
         
         if (displayStyle !== 'none' && visibilityStyle !== 'hidden') {
           lockScroll();
@@ -1125,6 +860,7 @@ const DynamicFormHandler = (() => {
       subtree: true,
     });
 
+    // Also listen for class changes
     const classObserver = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
@@ -1143,7 +879,7 @@ const DynamicFormHandler = (() => {
       attributeFilter: ['class'],
     });
 
-    console.log('[DynamicForm] Modal scroll lock setup complete');
+    console.log('[v0] Modal scroll lock setup complete');
   };
 
   // Public API
