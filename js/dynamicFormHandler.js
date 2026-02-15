@@ -588,46 +588,60 @@ const DynamicFormHandler = (() => {
     });
   };
 
+  
   /**
-   * Setup reCAPTCHA
-   */
+   * Setup reCAPTCHA v2
+  */
   const setupRecaptcha = () => {
     if (!recaptchaConfig || !recaptchaConfig.enabled) {
-      console.log('[DynamicForm] reCAPTCHA disabled');
-      return;
+        console.log('[DynamicForm] reCAPTCHA disabled');
+        return;
     }
 
     if (typeof grecaptcha === 'undefined') {
-      console.warn('[DynamicForm] reCAPTCHA script not loaded, retrying...');
-      setTimeout(setupRecaptcha, 500);
-      return;
+        console.warn('[DynamicForm] reCAPTCHA script not loaded, retrying...');
+        setTimeout(setupRecaptcha, 500);
+        return;
     }
 
     const recaptchaContainer = document.querySelector('#recaptcha-container');
     if (!recaptchaContainer) {
-      console.warn('[DynamicForm] reCAPTCHA container not found');
-      return;
+        console.warn('[DynamicForm] reCAPTCHA container not found');
+        return;
     }
 
     try {
-      grecaptcha.render('recaptcha-container', {
+        // Render reCAPTCHA v2 checkbox
+        grecaptcha.render('recaptcha-container', {
         sitekey: recaptchaConfig.siteKey,
-        callback: 'onRecaptchaSuccess',
-        'error-callback': 'onRecaptchaError',
-        'expired-callback': 'onRecaptchaExpired'
-      });
+        callback: (token) => {
+            recaptchaToken = token;
+            console.log('[DynamicForm] reCAPTCHA v2 verified successfully');
+            updateButtonState();
+        },
+        'expired-callback': () => {
+            recaptchaToken = null;
+            console.log('[DynamicForm] reCAPTCHA v2 expired');
+            updateButtonState();
+        },
+        'error-callback': () => {
+            recaptchaToken = null;
+            console.log('[DynamicForm] reCAPTCHA v2 error');
+            updateButtonState();
+        }
+        });
 
-      console.log('[DynamicForm] ✓ reCAPTCHA setup complete');
-      
-      // Set initial visibility
-      if (recaptchaConfig.showOnlyWhenFormValid) {
+        console.log('[DynamicForm] ✓ reCAPTCHA v2 setup complete');
+        
+        // Set initial visibility based on config
+        if (recaptchaConfig.showOnlyWhenFormValid) {
         updateRecaptchaVisibility();
-      } else {
+        } else {
         recaptchaContainer.style.display = recaptchaConfig.visible !== false ? 'block' : 'none';
-      }
-      
+        }
+        
     } catch (error) {
-      console.error('[DynamicForm] Error rendering reCAPTCHA:', error);
+        console.error('[DynamicForm] Error rendering reCAPTCHA v2:', error);
     }
   };
 
